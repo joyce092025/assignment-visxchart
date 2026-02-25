@@ -77,7 +77,7 @@ export default function LineChart({ data }: LineChartProps) {
                     borderRadius: "6px",
                     fontSize: "12px",
                     pointerEvents: "none",
-                    maxwidth: "200px",
+                    maxWidth: "200px",
                     position: "absolute",
                   }}
                 >
