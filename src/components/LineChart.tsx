@@ -6,11 +6,12 @@ import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { LinePath } from "@visx/shape";
 import { TooltipWithBounds, useTooltip } from "@visx/tooltip";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Switch from "@mui/material/Switch";
+import { bisector } from "d3-array";
 
 type DataPoint = {
-  timestamp: Date;
+  timestamp: number;
   value: number;
 };
 interface LineChartProps {
@@ -18,7 +19,13 @@ interface LineChartProps {
 }
 export default function LineChart({ data }: LineChartProps) {
   const margin = { top: 20, right: 20, bottom: 50, left: 60 };
-  const xData = data.map((item) => item.timestamp.getTime());
+  const sortedData = useMemo(() => {
+    data.sort(
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+  }, [data]);
+  const xData = data.map((item) => new Date(item.timestamp).getTime());
   const yData = data.map((item) => item.value);
   const { tooltipData, tooltipLeft, tooltipTop, showTooltip, hideTooltip } =
     useTooltip<DataPoint>();
@@ -26,7 +33,7 @@ export default function LineChart({ data }: LineChartProps) {
   const [hoveredPoint, setHoveredPoint] = useState<DataPoint | null>(null);
 
   return (
-    <div className="w-full h-full relative">
+    <div className="w-full h-full relative p-10">
       <div className="mb-4 flex justify-end items-center gap-2">
         <span className="text-sm font-medium text-gray-700">
           Line Visibility
@@ -76,12 +83,22 @@ export default function LineChart({ data }: LineChartProps) {
                 >
                   <div>
                     Timestamp:{" "}
-                    <strong>{tooltipData.timestamp.toLocaleString()}</strong>
+                    <strong>
+                      {new Date(tooltipData.timestamp).toLocaleString()}
+                    </strong>
                   </div>
                   <div>Value: {tooltipData.value}</div>
                 </TooltipWithBounds>
               )}
               <svg width={width} height={height}>
+                <rect
+                  x={0}
+                  y={0}
+                  width={width}
+                  height={height}
+                  fill="#f3f3f3"
+                  rx={14}
+                />
                 <Group left={margin.left} top={margin.top}>
                   {isVisible && (
                     <LinePath
@@ -89,7 +106,7 @@ export default function LineChart({ data }: LineChartProps) {
                       x={(d) => xScale(d.timestamp) ?? 0}
                       y={(d) => yScale(d.value) ?? 0}
                       stroke="#6366f1"
-                      strokeWidth={3}
+                      strokeWidth={1}
                     />
                   )}
                   <rect
@@ -97,30 +114,20 @@ export default function LineChart({ data }: LineChartProps) {
                     height={yMax}
                     fill="transparent"
                     onMouseMove={(event) => {
+                      const bisect = bisector(
+                        (d: DataPoint) => d.timestamp,
+                      ).center;
                       const point = localPoint(event);
                       if (!point) return;
 
                       const x = point.x - margin.left;
                       const hoveredTime = xScale.invert(x).getTime();
 
-                      let closest = data[0];
-                      let minDiff = Math.abs(
-                        closest.timestamp.getTime() - hoveredTime,
-                      );
-                      for (let i = 1; i < data.length; i++) {
-                        const diff = Math.abs(
-                          data[i].timestamp.getTime() - hoveredTime,
-                        );
-                        if (diff < minDiff) {
-                          minDiff = diff;
-                          closest = data[i];
-                        }
-                      }
+                      const index = bisect(data, hoveredTime);
+                      const closest = data[index];
+                      if (!closest) return;
 
-                      if (
-                        hoveredPoint?.timestamp.getTime() !==
-                        closest.timestamp.getTime()
-                      ) {
+                      if (hoveredPoint?.timestamp !== closest.timestamp) {
                         setHoveredPoint(closest);
                         showTooltip({
                           tooltipData: closest,
